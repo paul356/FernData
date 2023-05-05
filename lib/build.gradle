@@ -59,7 +59,7 @@ dependencies {
       exclude group: 'org.roaringbitmap'
     }
 
-    implementation 'org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.2.0'
+    implementation 'org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.2.1'
 
     // Use Scalatest for testing our library
     testImplementation 'junit:junit:4.13.2'
