@@ -29,3 +29,17 @@ With these two optimization the new system still can handle OLAP tasks by going 
 
 Besides these two optimizations we plan to use open source components as many as possible. Parquet, Avro are good candidates. These projects should be used as data files and log files. And an efficient and powerful programming language can improve efficiency, too. Though Iceberg is mainly a Java project, scala is more compact and has many modern language features. And Scala can interoperate with java code and libraries. So we think Scala is good option for this project. Since we will use the open source projects as the building blocks of this initiative, it is better to make this initiative a open source project, too. Anyone who is interested in our idea can contribute to this project.
 
+## How to Use this Library?
+First run gradle and build the file lib-0.0.1.jar. Copy lib-0.0.1.jar to the fold where you run spark-shell. Then you can try append through class FernDataWrite.
+```
+  spark-shell --packages org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.2.1 \
+              --jars lib-0.0.1.jar \
+              --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
+              --conf spark.sql.catalog.spark_catalog=org.apache.iceberg.spark.SparkSessionCatalog \
+              --conf spark.sql.catalog.spark_catalog.type=hive \
+              --conf spark.sql.catalog.local=org.apache.iceberg.spark.SparkCatalog \
+              --conf spark.sql.catalog.local.type=hadoop \
+              --conf spark.sql.catalog.local.warehouse=$PWD \
+              --conf spark.sql.defaultCatalog=local
+```
+
