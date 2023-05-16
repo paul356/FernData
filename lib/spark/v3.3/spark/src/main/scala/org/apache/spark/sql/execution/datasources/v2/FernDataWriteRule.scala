@@ -1,6 +1,8 @@
 package org.apache.spark.sql.execution.datasources.v2
 
 import java.util.UUID
+import org.apache.iceberg.spark.source.FernDataWriteBuilder
+import org.apache.iceberg.spark.source.SparkTable
 import org.apache.spark.sql.catalyst.plans.logical.AppendData
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
@@ -8,6 +10,7 @@ import org.apache.spark.sql.catalyst.utils.PlanUtils.isIcebergRelation
 import org.apache.spark.sql.connector.catalog.Table
 import org.apache.spark.sql.connector.write.ExtendedLogicalWriteInfoImpl
 import org.apache.spark.sql.connector.write.WriteBuilder
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types.StructType
 
 object FernDataWriteRule extends Rule[LogicalPlan] {
@@ -33,6 +36,6 @@ object FernDataWriteRule extends Rule[LogicalPlan] {
       writeOptions.asOptions,
       rowIdSchema,
       metadataSchema)
-    table.asWritable.newWriteBuilder(info)
+    new FernDataWriteBuilder(SparkSession.active, table.asInstanceOf[SparkTable].table, "", info);
   }
 }
