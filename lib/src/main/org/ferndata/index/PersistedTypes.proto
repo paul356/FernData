@@ -1,0 +1,26 @@
+syntax = "proto3";
+package org.ferndata.index;
+
+enum IndexNodeType {
+    ROOT = 0;
+    INDIRECT = 1;
+    LEAF = 2;
+}
+
+message KeyValuePair {
+    bytes key = 1;
+    int32 type = 2;
+    bytes value = 3;
+}
+
+message NodeReference {
+    bytes min = 1;
+    bytes max = 2;
+    string url = 3;
+}
+
+message PersistedIndexNode {
+    IndexNodeType type = 1;
+    repeated KeyValuePair datum = 2;
+    repeated NodeReference pointers = 3;
+}

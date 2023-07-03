@@ -34,7 +34,7 @@ First run gradle and build the file lib-0.0.1.jar. Copy lib-0.0.1.jar to the fol
 ```
   spark-shell --packages org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.2.1 \
               --jars lib-0.0.1.jar \
-              --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
+              --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.FernDataSparkSessionExtensions \
               --conf spark.sql.catalog.spark_catalog=org.apache.iceberg.spark.SparkSessionCatalog \
               --conf spark.sql.catalog.spark_catalog.type=hive \
               --conf spark.sql.catalog.local=org.apache.iceberg.spark.SparkCatalog \

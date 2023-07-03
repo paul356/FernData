@@ -12,6 +12,7 @@ plugins {
 
     // Apply the java-library plugin for API and implementation separation.
     id 'java-library'
+    id 'com.google.protobuf' version '0.9.3'
 }
 
 repositories {
@@ -22,14 +23,17 @@ repositories {
 sourceSets {
     main {
          scala {
-               srcDirs = ['spark/v3.3/spark/src/main', 'spark/v3.3/spark-extensions/src/main']
+               srcDirs = ['spark/v3.3/spark/src/main', 'spark/v3.3/spark-extensions/src/main', 'src/main']
+         }
+         proto {
+               srcDirs = ['src/main']
          }
     }
 }
 
 dependencies {
     // Use Scala 2.13 in our library project
-    implementation 'org.scala-lang:scala-library:2.13.10'
+    implementation 'org.scala-lang:scala-library:2.13.11'
 
     // This dependency is used internally, and not exposed to consumers on their own compile classpath.
     implementation 'com.google.guava:guava:31.1-jre'
@@ -40,7 +44,7 @@ dependencies {
     //compileOnly project(':iceberg-core')
     //compileOnly project(':iceberg-common')
     //compileOnly project(":iceberg-spark:iceberg-spark-${sparkMajorVersion}_${scalaVersion}")
-    compileOnly("org.apache.spark:spark-hive_2.12:3.3.2") {
+    compileOnly("org.apache.spark:spark-hive_2.13:3.3.2") {
       exclude group: 'org.apache.avro', module: 'avro'
       exclude group: 'org.apache.arrow'
       exclude group: 'org.apache.parquet'
@@ -49,7 +53,7 @@ dependencies {
       exclude group: 'io.netty', module: 'netty-common'
       exclude group: 'org.roaringbitmap'
     }
-    compileOnly("org.apache.spark:spark-catalyst_2.12:3.3.2") {
+    compileOnly("org.apache.spark:spark-catalyst_2.13:3.3.2") {
       exclude group: 'org.apache.avro', module: 'avro'
       exclude group: 'org.apache.arrow'
       exclude group: 'org.apache.parquet'
@@ -59,7 +63,9 @@ dependencies {
       exclude group: 'org.roaringbitmap'
     }
 
-    implementation 'org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.2.1'
+    implementation 'org.apache.iceberg:iceberg-spark-runtime-3.3_2.13:1.2.1'
+
+    implementation 'com.google.protobuf:protobuf-java:3.21.12'
 
     // Use Scalatest for testing our library
     testImplementation 'junit:junit:4.13.2'
@@ -74,8 +80,8 @@ dependencies {
 }
 
 // Apply a specific Java toolchain to ease working on different environments.
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(11)
-    }
-}
+//java {
+//    toolchain {
+//        languageVersion = JavaLanguageVersion.of(11)
+//    }
+//}

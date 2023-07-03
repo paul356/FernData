@@ -1,0 +1,43 @@
+*** Guide Questions
+1. Should a node be constructed as an array?
+   - Yes. Arrays or tree maps are good start.
+2. How many entries are there in an object?
+   - Many. So we can have less objects.
+3. How many nodes are there in an object?
+   - We don't want to add nodes inside objects. It is complicated and unneccessary.
+4. When is an object updated?
+   - When the range of data that a object takes charge of get updates?
+5. How are tree nodes mapped to objects?
+   - Ranges of data are mapped to objects.
+6. How are tree node updated?
+   - No tree nodes. Tree objects are updated with MVCC.
+7. How are entries deleted?
+   - Use tombstones in indirect objects. But rewrite the leaf objects.
+8. Bottom level objects contain a subtree.
+   - Arrays are fine too.
+9. Non-bottom objects will contain references to other objects.
+   - True.
+10. Objects form a buffered binary tree.
+   - Arrays are fine too. Let us use array at first.
+11. Can objects be made in-memory objects?
+    - Let us start by using AVRO format at first.
+12. Objects consists of indirect objects and leaf objects. Indirect objects point to other indirect objects or leaf objects.
+    - True.
+13. Indirect objects consist of references to other objects and buffered entries. They are in two different parts. Each part itself is an object.
+    - True.
+14. Leaft objects are sorted arrays or trees.
+    - Let use make them sorted arrays at first.
+15. This index data structure employs multiversion concurrency control. We aim to allow many readers to read concurrently.
+    - Most object storage systems allow concurrent reads and updates. We can easy implement MVCC.
+16. Index APIs are made of these interfaces.
+    - Put
+    - Get
+    - Delete
+    - Find
+    - Iterate
+
+*** Guide Graph
+
+          node1 -- bufferred entries
+          /   \
+       node2 node3
