@@ -3,8 +3,6 @@ package org.ferndata.index.impl
 import com.google.protobuf.ByteString
 
 import java.net.URL
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 import java.util.Arrays
 import java.util.UUID
 
@@ -44,7 +42,7 @@ private class WritableNode(
     childRef.get += (((ref._1, ref._2), ref._3))
   }
 
-  private def serializeThisNode(locations: LocationProvider, io: FileIO) : (Array[Byte], Array[Byte], URL) = {
+  private def serializeThisNode(locations: LocationProvider, io: FileIO, txn: Long) : (Array[Byte], Array[Byte], URL) = {
     val builder = PersistedIndexNode.newBuilder.setType(nodeType)
     dataBuffer.foreach(entry => {
       builder.addDatum(
@@ -71,8 +69,8 @@ private class WritableNode(
       case IndexNodeType.LEAF => "leaf"
       case IndexNodeType.UNRECOGNIZED => "unkown"
     }
-    val timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern(WritableNode.nameFormat))
-    val fileUrl = locations.newDataLocation(s"$fileType-$timestamp-${UUID.randomUUID.toString}")
+
+    val fileUrl = locations.newDataLocation(s"$fileType-$txn-${UUID.randomUUID.toString}")
     val outputFile = io.newOutputFile(fileUrl)
     val outStream = outputFile.create
 
@@ -102,7 +100,7 @@ private class WritableNode(
   }
 
 
-  def serialize(locations: LocationProvider, io: FileIO): List[(Array[Byte], Array[Byte], URL)] = {
+  def serialize(locations: LocationProvider, io: FileIO, txn: Long): List[(Array[Byte], Array[Byte], URL)] = {
     val isIndirectNode = !childRef.isEmpty
     if (isBufferOversized) {
       if (isIndirectNode) {
@@ -119,7 +117,7 @@ private class WritableNode(
             targetEntry.put(kv._1, kv._2._2)
           }
           childRef.get.remove(oldKey)
-          val serializedUrl = targetEntry.serialize(locations, io)
+          val serializedUrl = targetEntry.serialize(locations, io, txn)
           serializedUrl.foreach(putReference(_))
         }
         if (iter.hasNext) {
@@ -148,10 +146,10 @@ private class WritableNode(
         if (isReferenceOversized) {
           childRef.get.grouped(WritableNode.maxRefNum).map(entry => {
             val node = WritableNode(entry, IndexNodeType.INDIRECT)
-            node.serializeThisNode(locations, io)
+            node.serializeThisNode(locations, io, txn)
           }).toList
         } else {
-          List(serializeThisNode(locations, io))
+          List(serializeThisNode(locations, io, txn))
         }
       } else {
         // ceiling when the size is larger than x.5
@@ -173,11 +171,11 @@ private class WritableNode(
         val ranges = changePos.zipAll(changePos.drop(1), (-1: Long, Array.empty[Byte]), (-1: Long, dataBuffer.lastKey.concat(Array[Byte](1)))).drop(1).map(kv => (kv._1._2, kv._2._2))
         ranges.foldLeft(List.empty[(Array[Byte], Array[Byte], URL)])((curr, entry) => {
           val node = new WritableNode(dataBuffer.range(entry._1, entry._2), Option.empty[TreeMap[(Array[Byte], Array[Byte]), URL]], IndexNodeType.LEAF)
-          curr :+ node.serializeThisNode(locations, io)
+          curr :+ node.serializeThisNode(locations, io, txn)
         })
       }
     } else {
-      List(serializeThisNode(locations, io))
+      List(serializeThisNode(locations, io, txn))
     }
   }
 
@@ -231,7 +229,7 @@ private class ReadableNode(nodeAddr: URL) {
 
 }
 
-private class DataLakeIndexImpl(locations: LocationProvider, io: FileIO) extends DataLakeIndex {
+class DataLakeIndexImpl(locations: LocationProvider, io: FileIO) extends DataLakeIndex {
   private val rootHistory = new Queue[(Array[Byte], Array[Byte], URL)];
   private var modifiedRoot = Option.empty[WritableNode]
 
@@ -251,13 +249,13 @@ private class DataLakeIndexImpl(locations: LocationProvider, io: FileIO) extends
   }
   def snapshot(txn: Long): Unit = {
     if (!modifiedRoot.isEmpty) {
-      val result = modifiedRoot.map(_.serialize(locations, io))
+      val result = modifiedRoot.map(_.serialize(locations, io, txn))
       if (result.get.size > 1) {
         var refers = result.get;
         while (refers.size > 1) {
           val newRoot = WritableNode(IndexNodeType.ROOT)
           refers.foreach(newRoot.putReference(_))
-          refers = newRoot.serialize(locations, io)
+          refers = newRoot.serialize(locations, io, txn)
         }
         rootHistory.enqueue(refers.head)
       } else {

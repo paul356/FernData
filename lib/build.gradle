@@ -71,6 +71,8 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.scalatest:scalatest_2.13:3.2.14'
     testImplementation 'org.scalatestplus:junit-4-13_2.13:3.2.2.0'
+    testImplementation 'org.apache.hadoop:hadoop-client-api:3.3.2'
+    testImplementation 'org.apache.hadoop:hadoop-client-runtime:3.3.2'
 
     // Need scala-xml at test runtime
     testRuntimeOnly 'org.scala-lang.modules:scala-xml_2.13:1.2.0'
