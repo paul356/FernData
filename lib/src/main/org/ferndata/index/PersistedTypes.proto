@@ -14,8 +14,8 @@ message KeyValuePair {
 }
 
 message NodeReference {
-    bytes min = 1;
-    bytes max = 2;
+    bytes min = 1; // the minimum key in the child node
+    bytes max = 2; // the maximum key in the child node
     string url = 3;
 }
 

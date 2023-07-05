@@ -5,13 +5,14 @@ package ferndata
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
+import java.util.Arrays
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.iceberg.hadoop.HadoopFileIO
 import org.apache.iceberg.LocationProviders
 import org.apache.iceberg.io.FileIO
 import org.apache.iceberg.io.LocationProvider
-import org.ferndata.index.impl.DataLakeIndexImpl
+import org.ferndata.index.DataLakeIndex
 import scala.collection.mutable.Map
 import scala.jdk.CollectionConverters._
 
@@ -43,7 +44,7 @@ class LibrarySuite extends AnyFunSuite {
     val conf = new Configuration
     val io:FileIO = new HadoopFileIO(conf)
     val locations:LocationProvider = LocationProviders.locationsFor("file:///tmp/ferndata", Map.empty[String, String].asJava)
-    val index = new DataLakeIndexImpl(locations, io)
+    val index = DataLakeIndex(locations, io)
     index.put("one".getBytes, "1".getBytes)
     index.put("two".getBytes, "2".getBytes)
     index.snapshot(1)
@@ -51,5 +52,8 @@ class LibrarySuite extends AnyFunSuite {
     val pathStream = Files.list(Paths.get("/tmp/ferndata", "data"))
     val path = pathStream.findFirst
     assert(path.isPresent)
+
+    val two = index.get("two".getBytes)
+    assert(Arrays.compare(two.get, "2".getBytes) == 0)
   }
 }

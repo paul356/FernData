@@ -14,11 +14,12 @@ import org.ferndata.index.PersistedTypes.{IndexNodeType, KeyValuePair, NodeRefer
 
 import scala.collection.immutable.List
 import scala.collection.mutable.{Queue, TreeMap}
+import scala.collection.immutable.{TreeMap => ITreeMap}
 import scala.jdk.CollectionConverters._
 
 private class WritableNode(
   dataBuffer: TreeMap[Array[Byte], (Byte, Array[Byte])],
-  private var childRef: Option[TreeMap[(Array[Byte], Array[Byte]), URL]],
+  childRef: TreeMap[(Array[Byte], Array[Byte]), URL],
   nodeType: IndexNodeType) {
 
   private var dataSize = dataBuffer.foldLeft(0:Long)((curr, kv) => curr + kv._1.size + kv._2._2.size + 1);
@@ -32,6 +33,7 @@ private class WritableNode(
     if (childRef.isEmpty) {
       val oldVal = dataBuffer.remove(key)
       dataSize = dataSize - oldVal.fold(0)(_._2.size + 1)
+      // TODO: check dataBuffer is empty or has less data than averageLeafSize / 2
     } else {
       dataBuffer.put(key, (WritableNode.deleteTag, Array.empty[Byte]))
       dataSize = dataSize + key.size + 1
@@ -39,7 +41,7 @@ private class WritableNode(
   }
 
   def putReference(ref: (Array[Byte], Array[Byte], URL)) = {
-    childRef.get += (((ref._1, ref._2), ref._3))
+    childRef += (((ref._1, ref._2), ref._3))
   }
 
   private def serializeThisNode(locations: LocationProvider, io: FileIO, txn: Long) : (Array[Byte], Array[Byte], URL) = {
@@ -52,16 +54,14 @@ private class WritableNode(
         .setValue(ByteString.copyFrom(entry._2._2))
         .build)
     })
-    if (!childRef.isEmpty) {
-      childRef.get.foreach(entry => {
-        builder.addPointers(
-          NodeReference.newBuilder
-            .setMin(ByteString.copyFrom(entry._1._1))
-            .setMax(ByteString.copyFrom(entry._1._2))
-            .setUrl(entry._2.toString)
-            .build)
-      })
-    }
+    childRef.foreach(entry => {
+      builder.addPointers(
+        NodeReference.newBuilder
+          .setMin(ByteString.copyFrom(entry._1._1))
+          .setMax(ByteString.copyFrom(entry._1._2))
+          .setUrl(entry._2.toString)
+          .build)
+    })
 
     val fileType = nodeType match {
       case IndexNodeType.ROOT => "root"
@@ -82,19 +82,19 @@ private class WritableNode(
     val minKey = if (childRef.isEmpty)
       dataBuffer.firstKey
     else if (dataBuffer.isEmpty)
-      childRef.get.firstKey._1
-    else if (WritableNode.ordering.compare(dataBuffer.firstKey, childRef.get.firstKey._1) <= 0)
+      childRef.firstKey._1
+    else if (WritableNode.ordering.compare(dataBuffer.firstKey, childRef.firstKey._1) <= 0)
       dataBuffer.firstKey
     else
-      childRef.get.firstKey._1
+      childRef.firstKey._1
     val maxKey = if (childRef.isEmpty)
       dataBuffer.lastKey
     else if (dataBuffer.isEmpty)
-      childRef.get.lastKey._2
-    else if (WritableNode.ordering.compare(dataBuffer.lastKey, childRef.get.lastKey._2) >= 0)
+      childRef.lastKey._2
+    else if (WritableNode.ordering.compare(dataBuffer.lastKey, childRef.lastKey._2) >= 0)
       dataBuffer.lastKey
     else
-      childRef.get.lastKey._2
+      childRef.lastKey._2
 
     return (minKey, maxKey, new URL(fileUrl))
   }
@@ -104,7 +104,7 @@ private class WritableNode(
     val isIndirectNode = !childRef.isEmpty
     if (isBufferOversized) {
       if (isIndirectNode) {
-        val iter = childRef.get.iterator
+        val iter = childRef.iterator
         // childRef has at least one pointer
         val ((minKey, maxKey), url) = iter.next()
         var lastMinKey = (minKey, maxKey)
@@ -116,7 +116,7 @@ private class WritableNode(
           } else {
             targetEntry.put(kv._1, kv._2._2)
           }
-          childRef.get.remove(oldKey)
+          childRef.remove(oldKey)
           val serializedUrl = targetEntry.serialize(locations, io, txn)
           serializedUrl.foreach(putReference(_))
         }
@@ -144,7 +144,7 @@ private class WritableNode(
 
         // To split indirect pointers into different nodes
         if (isReferenceOversized) {
-          childRef.get.grouped(WritableNode.maxRefNum).map(entry => {
+          childRef.grouped(WritableNode.maxRefNum).map(entry => {
             val node = WritableNode(entry, IndexNodeType.INDIRECT)
             node.serializeThisNode(locations, io, txn)
           }).toList
@@ -170,7 +170,7 @@ private class WritableNode(
         // Get the data ranges for partitions
         val ranges = changePos.zipAll(changePos.drop(1), (-1: Long, Array.empty[Byte]), (-1: Long, dataBuffer.lastKey.concat(Array[Byte](1)))).drop(1).map(kv => (kv._1._2, kv._2._2))
         ranges.foldLeft(List.empty[(Array[Byte], Array[Byte], URL)])((curr, entry) => {
-          val node = new WritableNode(dataBuffer.range(entry._1, entry._2), Option.empty[TreeMap[(Array[Byte], Array[Byte]), URL]], IndexNodeType.LEAF)
+          val node = WritableNode(dataBuffer.range(entry._1, entry._2))
           curr :+ node.serializeThisNode(locations, io, txn)
         })
       }
@@ -184,7 +184,7 @@ private class WritableNode(
   }
 
   private def isReferenceOversized: Boolean = {
-    childRef.fold(0)(_.size) > WritableNode.maxRefNum
+    childRef.size > WritableNode.maxRefNum
   }
 }
 
@@ -217,19 +217,62 @@ private object WritableNode {
   }
 
   def apply(nodeType: IndexNodeType): WritableNode = {
-    new WritableNode(TreeMap.empty[Array[Byte], (Byte, Array[Byte])], Option.empty[TreeMap[(Array[Byte], Array[Byte]), URL]], nodeType)
+    new WritableNode(TreeMap.empty[Array[Byte], (Byte, Array[Byte])], TreeMap.empty[(Array[Byte], Array[Byte]), URL], nodeType)
   }
 
   def apply(refs: TreeMap[(Array[Byte], Array[Byte]), URL], nodeType: IndexNodeType): WritableNode = {
-    new WritableNode(TreeMap.empty[Array[Byte], (Byte, Array[Byte])], Some(refs), nodeType)
+    new WritableNode(TreeMap.empty[Array[Byte], (Byte, Array[Byte])], refs, nodeType)
+  }
+
+  def apply(dataBuffer: TreeMap[Array[Byte], (Byte, Array[Byte])]): WritableNode = {
+    new WritableNode(dataBuffer, TreeMap.empty[(Array[Byte], Array[Byte]), URL], IndexNodeType.LEAF);
   }
 }
 
-private class ReadableNode(nodeAddr: URL) {
-
+private class ReadableNode(
+  dataBuffer: ITreeMap[Array[Byte], (Byte, Array[Byte])],
+  childRef: ITreeMap[(Array[Byte], Array[Byte]), URL],
+  nodeType: IndexNodeType) {
+  def get(key: Array[Byte], io: FileIO): Option[Array[Byte]] = {
+    val value = dataBuffer.get(key)
+    if (value.isDefined) {
+      if (value.get._1 == WritableNode.deleteTag)
+        Option.empty[Array[Byte]]
+      else
+        Some(value.get._2)
+    } else if (!childRef.isEmpty) {
+      val maxB4 = childRef.find(entry => WritableNode.ordering.compare(key, entry._1._1) >= 0)
+      val contain = maxB4.filter(entry => WritableNode.ordering.compare(key, entry._1._2) <= 0)
+      contain.flatMap(entry => {
+        val childNode = ReadableNode(entry._2, io)
+        childNode.get(key, io)
+      })
+    } else {
+      Option.empty[Array[Byte]]
+    }
+  }
 }
 
-class DataLakeIndexImpl(locations: LocationProvider, io: FileIO) extends DataLakeIndex {
+private object ReadableNode {
+  import WritableNode.ordering
+
+  def apply(url: URL, io: FileIO): ReadableNode = {
+    val inputFile = io.newInputFile(url.toString)
+    val inputStream = inputFile.newStream
+    val persistedNode = PersistedIndexNode.parseFrom(inputStream)
+    val dataBufferBuilder = ITreeMap.newBuilder[Array[Byte], (Byte, Array[Byte])]
+    persistedNode.getDatumList.asScala.foreach(entry => {
+      dataBufferBuilder.addOne((entry.getKey.toByteArray, (entry.getType.toByte, entry.getValue.toByteArray)))
+    })
+    val childRefBuilder = ITreeMap.newBuilder[(Array[Byte], Array[Byte]), URL]
+    persistedNode.getPointersList.asScala.foreach(entry => {
+      childRefBuilder.addOne(((entry.getMin.toByteArray, entry.getMax.toByteArray), new URL(entry.getUrl)))
+    })
+    new ReadableNode(dataBufferBuilder.result(), childRefBuilder.result(), persistedNode.getType)
+  }
+}
+
+private[index] class DataLakeIndexImpl(locations: LocationProvider, io: FileIO) extends DataLakeIndex {
   private val rootHistory = new Queue[(Array[Byte], Array[Byte], URL)];
   private var modifiedRoot = Option.empty[WritableNode]
 
@@ -265,7 +308,18 @@ class DataLakeIndexImpl(locations: LocationProvider, io: FileIO) extends DataLak
     }
   }
   def get(key: Array[Byte]): Option[Array[Byte]] = {
-    Option.empty[Array[Byte]]
+    if (rootHistory.isEmpty)
+      Option.empty[Array[Byte]]
+    else {
+      val history = rootHistory.last
+      if (WritableNode.ordering.compare(key, history._1) >= 0 &&
+        WritableNode.ordering.compare(key, history._2) <= 0) {
+        val rootNode = ReadableNode(history._3, io)
+        rootNode.get(key, io)
+      } else {
+        Option.empty[Array[Byte]]
+      }
+    }
   }
   def minAfter(key: Array[Byte]): Option[(Array[Byte], Array[Byte])] = {
     Option.empty[(Array[Byte], Array[Byte])]
